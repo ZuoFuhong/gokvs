@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	kvserror "gokvs/errors"
+	errs "gokvs/errors"
 	"io"
 	"os"
 	"sort"
@@ -107,6 +107,7 @@ func logPath(path string, gen uint64) string {
 	return fmt.Sprintf("%s/%d.log", path, gen)
 }
 
+// 日志文件名升序排列
 func sortedGenList(path string) ([]int, error) {
 	genList := make([]int, 0)
 	files, err := os.ReadDir(path)
@@ -206,7 +207,7 @@ func (kvs *KvsStore) Get(key string) (string, error) {
 		}
 		return cmd.Value, nil
 	} else {
-		return "", kvserror.KeyNotFound
+		return "", errs.KeyNotFound
 	}
 }
 
@@ -233,11 +234,12 @@ func (kvs *KvsStore) Remove(key string) error {
 			_ = kvs.compact()
 		}
 	} else {
-		return kvserror.KeyNotFound
+		return errs.KeyNotFound
 	}
 	return nil
 }
 
+// 压缩日志，清理重叠的日志条目
 func (kvs *KvsStore) compact() (err error) {
 	compactionGen := kvs.currentGen + 1
 	kvs.currentGen += 2
@@ -250,7 +252,7 @@ func (kvs *KvsStore) compact() (err error) {
 		return err
 	}
 	kvs.index.Range(func(key, value interface{}) bool {
-		cmdPos := value.(CommandPos)
+		cmdPos := value.(*CommandPos)
 		reader := kvs.readers[cmdPos.gen]
 		if reader.pos != cmdPos.pos {
 			err = reader.seek(cmdPos.pos)
@@ -280,9 +282,11 @@ func (kvs *KvsStore) compact() (err error) {
 		return err
 	}
 	for _, gen := range genList {
-		err := os.Remove(logPath(kvs.path, uint64(gen)))
-		if err != nil {
-			return err
+		if uint64(gen) < compactionGen {
+			err := os.Remove(logPath(kvs.path, uint64(gen)))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	kvs.uncompacted = 0
