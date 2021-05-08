@@ -44,4 +44,4 @@ go run kvs-cli.go get name
 
 ## License
 
-This project is licensed under the MIT license.
+This project is licensed under the [MIT license](https://github.com/ZuoFuhong/gokvs/blob/master/LICENSE).
