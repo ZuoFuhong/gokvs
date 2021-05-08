@@ -16,6 +16,7 @@ import (
 const CompactionThreshold = 1024 * 1024
 
 type KvsStore struct {
+	mutex       sync.Mutex
 	path        string
 	readers     map[uint64]*BufReaderWithPos
 	writer      *BufWriterWithPos
@@ -54,12 +55,12 @@ func NewKvsStore(path string) (KvsEngine, error) {
 		return nil, err
 	}
 	kvsStore := &KvsStore{
-		path,
-		readers,
-		writer,
-		uint64(currentGen),
-		index,
-		uncompacted,
+		path:        path,
+		readers:     readers,
+		writer:      writer,
+		currentGen:  uint64(currentGen),
+		index:       index,
+		uncompacted: uncompacted,
 	}
 	return kvsStore, nil
 }
@@ -158,6 +159,8 @@ func NewCommandPos(gen, start, end uint64) *CommandPos {
 }
 
 func (kvs *KvsStore) Set(key, value string) error {
+	kvs.mutex.Lock()
+	defer kvs.mutex.Unlock()
 	cmd := &Command{SET, key, value}
 	pos := kvs.writer.pos
 	bytes, err := json.Marshal(cmd)
@@ -186,6 +189,8 @@ func (kvs *KvsStore) Set(key, value string) error {
 }
 
 func (kvs *KvsStore) Get(key string) (string, error) {
+	kvs.mutex.Lock()
+	defer kvs.mutex.Unlock()
 	if val, ok := kvs.index.Load(key); ok {
 		pos := val.(*CommandPos)
 		reader := kvs.readers[pos.gen]
@@ -212,6 +217,8 @@ func (kvs *KvsStore) Get(key string) (string, error) {
 }
 
 func (kvs *KvsStore) Remove(key string) error {
+	kvs.mutex.Lock()
+	defer kvs.mutex.Unlock()
 	if _, ok := kvs.index.Load(key); ok {
 		cmd := &Command{DELETE, key, ""}
 		pos := kvs.writer.pos
