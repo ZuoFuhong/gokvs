@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"gokvs/engines"
-	kvserror "gokvs/errors"
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/engines"
+	kvserror "github.com/ZuoFuhong/gokvs/errors"
+	"github.com/ZuoFuhong/gokvs/network"
+	"log"
 )
 
 type Delete struct {
@@ -28,7 +29,8 @@ func parseDeleteFrame(parse *network.Parse) (Command, error) {
 	return cmd, nil
 }
 
-func (c *Delete) Apply(db engines.KvsEngine, connnection network.Connnection) error {
+func (c *Delete) Apply(db engines.KvsEngine) *network.Frame {
+	log.Printf("Remove `%s` from node value", c.key)
 	rsp := new(network.Frame)
 	err := db.Remove(c.key)
 	if err != nil {
@@ -43,29 +45,24 @@ func (c *Delete) Apply(db engines.KvsEngine, connnection network.Connnection) er
 		rsp.Ftype = network.Integer
 		rsp.Value = 1
 	}
-	err = connnection.WriteFrame(rsp)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rsp
 }
 
-func (c *Delete) IntoFrame() network.Frame {
+func (c *Delete) IntoFrame() *network.Frame {
 	array := []*network.Frame{
 		{
 			Ftype: network.Bulk,
-			Value: "del",
+			Value: DELETE,
 		},
 		{
 			Ftype: network.Bulk,
 			Value: c.key,
 		},
 	}
-	frame := network.Frame{
+	return &network.Frame{
 		Ftype: network.Array,
 		Value: array,
 	}
-	return frame
 }
 
 func (c *Delete) Name() string {

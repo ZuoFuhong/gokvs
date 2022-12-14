@@ -1,25 +1,46 @@
-package gokvs
+package main
 
 import (
 	"fmt"
-	"gokvs/cmd"
-	"gokvs/engines"
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/cmd"
+	"github.com/ZuoFuhong/gokvs/config"
+	"github.com/ZuoFuhong/gokvs/engines"
+	"github.com/ZuoFuhong/gokvs/network"
+	"github.com/ZuoFuhong/gokvs/raft"
+	"io"
+	"log"
 	"net"
 )
 
 type KvsServer struct {
-	db engines.KvsEngine
+	addr string
+	db   engines.KvsEngine
+	raft *raft.Node
 }
 
-func NewKvsServer(engine engines.KvsEngine) *KvsServer {
+func NewKvsServer() *KvsServer {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		panic("load config fail: " + err.Error())
+	}
+	config.SetGlobalConfig(cfg)
+	engine, err := engines.NewKvsStore(cfg.Server.DataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	raftNode, err := raft.NewRaftNode(engine)
+	if err != nil {
+		log.Fatal(err)
+	}
 	return &KvsServer{
-		engine,
+		addr: cfg.Server.Addr,
+		db:   engine,
+		raft: raftNode,
 	}
 }
 
-func (s *KvsServer) Run(addr string) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+func (s *KvsServer) Serve() error {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", s.addr)
 	if err != nil {
 		return err
 	}
@@ -35,6 +56,7 @@ func (s *KvsServer) Run(addr string) error {
 		handler := Handler{
 			db:         s.db,
 			connection: network.NewConnection(conn),
+			raft:       s.raft,
 		}
 		go handler.run()
 	}
@@ -43,28 +65,40 @@ func (s *KvsServer) Run(addr string) error {
 type Handler struct {
 	db         engines.KvsEngine
 	connection network.Connnection
+	raft       *raft.Node
 }
 
 func (h *Handler) run() {
 	for {
-		// 1.读取一个Frame
+		// 1.读取一个 Frame
 		frame, err := h.connection.ReadFrame()
+		if err == io.EOF {
+			return
+		}
 		if err != nil {
-			// 网络读取Frame失败或无效协议无法解析，终止连接
+			// 网络读取 Frame 失败或无效协议无法解析，终止连接
 			fmt.Printf("connection terminate %s, read frame error: %v\n", h.connection.RemoteAddr(), err)
 			return
 		}
 		// 2.转换一个 Frame 为 command 结构
 		command, err := cmd.FromFrame(frame)
 		if err != nil {
-			// 解析Frame是不支持的命令，终止连接
-			fmt.Printf("connection terminate %s, convert command error: %v\n", h.connection.RemoteAddr(), err)
+			// 解析 Frame 是不支持的命令，终止连接
+			fmt.Printf("connection terminate %s, parse command error: %v\n", h.connection.RemoteAddr(), err)
 			return
 		}
-		// 3.执行命令进行db操作
-		err = command.Apply(h.db, h.connection)
-		if err != nil {
-			fmt.Printf("connection terminate %s, command apply error: %v\n", h.connection.RemoteAddr(), err)
+		var rspFrame *network.Frame
+		switch command.Name() {
+		case cmd.GET:
+			rspFrame = command.Apply(h.db)
+		case cmd.SET, cmd.DELETE:
+			rspFrame = h.raft.Apply(frame)
+		case cmd.MEMBER:
+			rspFrame = h.raft.Member(command.(*cmd.Member))
+		}
+		// 3.回包
+		if err := h.connection.WriteFrame(rspFrame); err != nil {
+			fmt.Printf("connection terminate %s, write frame error: %v\n", h.connection.RemoteAddr(), err)
 			return
 		}
 	}

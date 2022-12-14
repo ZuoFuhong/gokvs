@@ -1,20 +1,27 @@
 package cmd
 
 import (
-	"errors"
-	"gokvs/engines"
-	"gokvs/network"
+	"fmt"
+	"github.com/ZuoFuhong/gokvs/engines"
+	"github.com/ZuoFuhong/gokvs/network"
 )
 
 const (
 	SET    = "set"
 	GET    = "get"
 	DELETE = "del"
+	MEMBER = "member"
+)
+
+const (
+	MemberAdd    = "add"
+	MemberRemove = "remove"
+	MemberList   = "list"
 )
 
 type Command interface {
-	Apply(db engines.KvsEngine, connnection network.Connnection) error
-	IntoFrame() network.Frame
+	Apply(db engines.KvsEngine) *network.Frame
+	IntoFrame() *network.Frame
 	Name() string
 }
 
@@ -33,8 +40,10 @@ func FromFrame(frame *network.Frame) (Command, error) {
 		cmd, err = parseGetFrame(parse)
 	case DELETE:
 		cmd, err = parseDeleteFrame(parse)
+	case MEMBER:
+		cmd, err = parseMemberFrame(parse)
 	default:
-		err = errors.New("unknown command name")
+		err = fmt.Errorf("unknown command %s", commandName)
 	}
 	if err == nil {
 		err = parse.Finish()

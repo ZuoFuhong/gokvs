@@ -1,22 +1,36 @@
 ## gokvs
 
-`gokvs` 是一个基于redis协议且支持持久化的key/value存储系统
+**gokvs** 是一个基于 **Raft** 共识算法且支持 Redis 协议的分布式可靠的 key/value 存储系统
 
 ## Running
 
-该项目的`bin`目录下提供了服务端 和 客户端执行文件
-
-终端模式下进入`bin/server`目录，启动服务端：
+启动 kvs-server
 
 ```
-go run kvs-server.go
+go run main.go
 ```
 
-终端模式下进入`bin/client`目录，使用客户端：
+终端命令操作进入 `kvsctl` 目录编译工具，支持基本数据操作和集群管理：
 
+```shell
+go build -o kvsctl
+
+# 读写命令
+./kvsctl get name
+./kvsctl get name -a 127.0.0.1:2317
+
+# 集群命令
+./kvsctl member add 127.0.0.1:2317 127.0.0.1:2318
+./kvsctl member remove 127.0.0.1:2317
+./kvsctl member list
 ```
-go run kvs-cli.go set name mars
-go run kvs-cli.go get name
+
+集群服务器列表：
+
+```shell
+id=127.0.0.1:2317 address=127.0.0.1:2318 suffrage=0 isLeader=true
+id=127.0.0.1:2327 address=127.0.0.1:2328 suffrage=0 isLeader=false
+id=127.0.0.1:2337 address=127.0.0.1:2338 suffrage=0 isLeader=false
 ```
 
 ## Supported commands
