@@ -58,4 +58,4 @@ id=127.0.0.1:2337 address=127.0.0.1:2338 suffrage=0 isLeader=false
 
 ## License
 
-This project is licensed under the [MIT license](https://github.com/ZuoFuhong/gokvs/blob/master/LICENSE).
+This project is licensed under the [Apache 2.0 license](https://github.com/ZuoFuhong/gokvs/blob/master/LICENSE).
