@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/network"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"

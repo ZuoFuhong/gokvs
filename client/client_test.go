@@ -1,4 +1,4 @@
-package gokvs
+package client
 
 import (
 	"fmt"

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	errs "gokvs/errors"
+	errs "github.com/ZuoFuhong/gokvs/errors"
 	"io"
 	"os"
 	"sort"
@@ -13,7 +13,9 @@ import (
 	"sync"
 )
 
-const CompactionThreshold = 1024 * 1024
+const (
+	CompactionThreshold = 1024 * 1024
+)
 
 type KvsStore struct {
 	mutex       sync.Mutex
@@ -110,6 +112,9 @@ func logPath(path string, gen uint64) string {
 
 // 日志文件名升序排列
 func sortedGenList(path string) ([]int, error) {
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return nil, err
+	}
 	genList := make([]int, 0)
 	files, err := os.ReadDir(path)
 	if err != nil {
@@ -178,10 +183,9 @@ func (kvs *KvsStore) Set(key, value string) error {
 	if val, ok := kvs.index.Load(key); ok {
 		// 记录重复的命令字节数
 		kvs.uncompacted += val.(*CommandPos).len
-	} else {
-		commandPos := NewCommandPos(kvs.currentGen, pos, kvs.writer.pos)
-		kvs.index.Store(key, commandPos)
 	}
+	commandPos := NewCommandPos(kvs.currentGen, pos, kvs.writer.pos)
+	kvs.index.Store(key, commandPos)
 	if kvs.uncompacted > CompactionThreshold {
 		_ = kvs.compact()
 	}

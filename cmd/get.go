@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"gokvs/engines"
-	kvserror "gokvs/errors"
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/engines"
+	kvserror "github.com/ZuoFuhong/gokvs/errors"
+	"github.com/ZuoFuhong/gokvs/network"
+	"log"
 )
 
 type Get struct {
@@ -29,7 +30,8 @@ func parseGetFrame(parse *network.Parse) (Command, error) {
 	return cmd, nil
 }
 
-func (c *Get) Apply(db engines.KvsEngine, connnection network.Connnection) error {
+func (c *Get) Apply(db engines.KvsEngine) *network.Frame {
+	log.Printf("Get the value of `%s` from node value\n", c.key)
 	rsp := new(network.Frame)
 	value, err := db.Get(c.key)
 	if err != nil {
@@ -43,25 +45,21 @@ func (c *Get) Apply(db engines.KvsEngine, connnection network.Connnection) error
 		rsp.Ftype = network.Bulk
 		rsp.Value = value
 	}
-	err = connnection.WriteFrame(rsp)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rsp
 }
 
-func (c *Get) IntoFrame() network.Frame {
+func (c *Get) IntoFrame() *network.Frame {
 	array := []*network.Frame{
 		{
 			Ftype: network.Bulk,
-			Value: "get",
+			Value: GET,
 		},
 		{
 			Ftype: network.Bulk,
 			Value: c.key,
 		},
 	}
-	return network.Frame{
+	return &network.Frame{
 		Ftype: network.Array,
 		Value: array,
 	}

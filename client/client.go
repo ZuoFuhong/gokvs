@@ -1,9 +1,9 @@
-package gokvs
+package client
 
 import (
 	"errors"
-	"gokvs/cmd"
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/cmd"
+	"github.com/ZuoFuhong/gokvs/network"
 	"net"
 	"strconv"
 )
@@ -27,13 +27,25 @@ func NewClient(addr string) (*Client, error) {
 	return client, nil
 }
 
-func (c *Client) Set(key, value string) (string, error) {
-	frame := cmd.NewSet(key, value).IntoFrame()
-	err := c.connnection.WriteFrame(&frame)
+func (c *Client) Member(opt, serverID, address string) (string, error) {
+	frame := cmd.NewMember(opt, serverID, address).IntoFrame()
+	rsp, err := c.Invoke(frame)
 	if err != nil {
 		return "", err
 	}
-	rsp, err := c.readResponse()
+	switch rsp.Ftype {
+	case network.Simple:
+		return rsp.Value.(string), nil
+	case network.Error:
+		return rsp.Value.(string), nil
+	default:
+		return "", errors.New("protocol error; expected simple frame or error frame")
+	}
+}
+
+func (c *Client) Set(key, value string) (string, error) {
+	frame := cmd.NewSet(key, value).IntoFrame()
+	rsp, err := c.Invoke(frame)
 	if err != nil {
 		return "", err
 	}
@@ -49,11 +61,7 @@ func (c *Client) Set(key, value string) (string, error) {
 
 func (c *Client) Get(key string) (string, error) {
 	frame := cmd.NewGet(key).IntoFrame()
-	err := c.connnection.WriteFrame(&frame)
-	if err != nil {
-		return "", err
-	}
-	rsp, err := c.readResponse()
+	rsp, err := c.Invoke(frame)
 	if err != nil {
 		return "", err
 	}
@@ -71,11 +79,7 @@ func (c *Client) Get(key string) (string, error) {
 
 func (c *Client) Del(key string) (string, error) {
 	frame := cmd.NewDelete(key).IntoFrame()
-	err := c.connnection.WriteFrame(&frame)
-	if err != nil {
-		return "", err
-	}
-	rsp, err := c.readResponse()
+	rsp, err := c.Invoke(frame)
 	if err != nil {
 		return "", err
 	}
@@ -95,4 +99,11 @@ func (c *Client) readResponse() (*network.Frame, error) {
 		return nil, err
 	}
 	return frame, nil
+}
+
+func (c *Client) Invoke(frame *network.Frame) (*network.Frame, error) {
+	if err := c.connnection.WriteFrame(frame); err != nil {
+		return nil, err
+	}
+	return c.readResponse()
 }

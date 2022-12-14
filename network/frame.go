@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"errors"
 	"strconv"
 )
@@ -85,7 +86,12 @@ func check(c *Cursor) error {
 	return nil
 }
 
-// 解析一个Frame
+// ParseRESP 解析一个Frame
+func ParseRESP(buf []byte) (*Frame, error) {
+	cur := newCursor(buf)
+	return parse(&cur)
+}
+
 func parse(c *Cursor) (*Frame, error) {
 	tb, err := getByte(c)
 	if err != nil {
@@ -231,4 +237,80 @@ func getByte(c *Cursor) (byte, error) {
 		return 0, Incomplete
 	}
 	return c.getByte()
+}
+
+func (f *Frame) Bytes() ([]byte, error) {
+	var buf bytes.Buffer
+	switch f.Ftype {
+	case Array:
+		// Encode the frame type prefix. For an array, it is '*'.
+		buf.WriteByte('*')
+		value, ok := f.Value.([]*Frame)
+		if !ok {
+			return nil, errors.New("unknown value")
+		}
+		// Encode the length of the array
+		length := strconv.FormatInt(int64(len(value)), 10)
+		buf.WriteString(length + "\r\n")
+		// Iterate and encode each entry in the array.
+		for _, v := range value {
+			if err := v.writeString(&buf); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		if err := f.writeString(&buf); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+func (f *Frame) writeString(buf *bytes.Buffer) error {
+	switch f.Ftype {
+	case Simple:
+		value, ok := f.Value.(string)
+		if !ok {
+			return errors.New("unknown value")
+		}
+		buf.WriteString("+" + value + "\r\n")
+	case Error:
+		value, ok := f.Value.(string)
+		if !ok {
+			return errors.New("unknown value")
+		}
+		buf.WriteString("-" + value + "\r\n")
+	case Integer:
+		value, ok := f.Value.(int)
+		if !ok {
+			return errors.New("unknown value")
+		}
+		valstr := strconv.FormatInt(int64(value), 10)
+		buf.WriteString(":" + valstr + "\r\n")
+	case Null:
+		buf.WriteString("$-1\r\n")
+	case Bulk:
+		value, ok := f.Value.(string)
+		if !ok {
+			return errors.New("unknown value")
+		}
+		blen := strconv.FormatInt(int64(len(value)), 10)
+		buf.WriteString("$" + blen + "\r\n" + value + "\r\n")
+	case Array:
+		value, ok := f.Value.([]*Frame)
+		if !ok {
+			return errors.New("unknown value")
+		}
+		alen := strconv.FormatInt(int64(len(value)), 10)
+		buf.WriteString("*" + alen + "\r\n")
+		for _, frame := range value {
+			val, ok := frame.Value.(string)
+			if !ok {
+				return errors.New("unknown value")
+			}
+			alen := strconv.FormatInt(int64(len(val)), 10)
+			buf.WriteString("$" + alen + "\r\n" + val + "\r\n")
+		}
+	}
+	return nil
 }

@@ -2,7 +2,7 @@ package engines
 
 import (
 	"fmt"
-	errs "gokvs/errors"
+	errs "github.com/ZuoFuhong/gokvs/errors"
 	"os"
 	"testing"
 

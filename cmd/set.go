@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"gokvs/engines"
-	"gokvs/network"
+	"github.com/ZuoFuhong/gokvs/engines"
+	"github.com/ZuoFuhong/gokvs/network"
+	"log"
 )
 
 type Set struct {
@@ -35,7 +36,8 @@ func parseSetFrame(p *network.Parse) (Command, error) {
 }
 
 // Apply 执行 Set 命令
-func (c *Set) Apply(db engines.KvsEngine, connnection network.Connnection) error {
+func (c *Set) Apply(db engines.KvsEngine) *network.Frame {
+	log.Printf("Add `%s` to current node", c.key)
 	rsp := new(network.Frame)
 	err := db.Set(c.key, c.value)
 	if err != nil {
@@ -45,19 +47,15 @@ func (c *Set) Apply(db engines.KvsEngine, connnection network.Connnection) error
 		rsp.Ftype = network.Simple
 		rsp.Value = "OK"
 	}
-	err = connnection.WriteFrame(rsp)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rsp
 }
 
 // IntoFrame 将command转换为Frame
-func (c *Set) IntoFrame() network.Frame {
+func (c *Set) IntoFrame() *network.Frame {
 	array := []*network.Frame{
 		{
 			Ftype: network.Bulk,
-			Value: "set",
+			Value: SET,
 		},
 		{
 			Ftype: network.Bulk,
@@ -68,7 +66,7 @@ func (c *Set) IntoFrame() network.Frame {
 			Value: c.value,
 		},
 	}
-	return network.Frame{
+	return &network.Frame{
 		Ftype: network.Array,
 		Value: array,
 	}

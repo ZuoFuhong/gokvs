@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"net"
-	"strconv"
 )
 
 type Connnection struct {
@@ -72,96 +71,12 @@ func (c *Connnection) parseFrame() (*Frame, bool, error) {
 
 // WriteFrame 写入一个Frame
 func (c *Connnection) WriteFrame(frame *Frame) error {
-	switch frame.Ftype {
-	case Array:
-		// Encode the frame type prefix. For an array, it is '*'.
-		if err := c.writer.WriteByte('*'); err != nil {
-			return err
-		}
-		value, ok := frame.Value.([]*Frame)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		// Encode the length of the array
-		length := strconv.FormatInt(int64(len(value)), 10)
-		if _, err := c.writer.WriteString(length + "\r\n"); err != nil {
-			return err
-		}
-		// Iterate and encode each entry in the array.
-		for _, v := range value {
-			if err := c.writeValue(v); err != nil {
-				return err
-			}
-		}
-	default:
-		if err := c.writeValue(frame); err != nil {
-			return err
-		}
+	frameBytes, err := frame.Bytes()
+	if err != nil {
+		return err
+	}
+	if _, err := c.writer.Write(frameBytes); err != nil {
+		return err
 	}
 	return c.writer.Flush()
-}
-
-func (c *Connnection) writeValue(frame *Frame) error {
-	switch frame.Ftype {
-	case Simple:
-		value, ok := frame.Value.(string)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		if _, err := c.writer.WriteString("+" + value + "\r\n"); err != nil {
-			return err
-		}
-	case Error:
-		value, ok := frame.Value.(string)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		if _, err := c.writer.WriteString("-" + value + "\r\n"); err != nil {
-			return err
-		}
-	case Integer:
-		value, ok := frame.Value.(int)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		valstr := strconv.FormatInt(int64(value), 10)
-		if _, err := c.writer.WriteString(":" + valstr + "\r\n"); err != nil {
-			return err
-		}
-	case Null:
-		if _, err := c.writer.WriteString("$-1\r\n"); err != nil {
-			return err
-		}
-	case Bulk:
-		value, ok := frame.Value.(string)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		blen := strconv.FormatInt(int64(len(value)), 10)
-		if _, err := c.writer.WriteString("$" + blen + "\r\n" + value + "\r\n"); err != nil {
-			return err
-		}
-	case Array:
-		value, ok := frame.Value.([]*Frame)
-		if !ok {
-			return errors.New("unknown value")
-		}
-		alen := strconv.FormatInt(int64(len(value)), 10)
-		_, err := c.writer.WriteString("*" + alen + "\r\n")
-		if err != nil {
-			return err
-		}
-		for _, frame := range value {
-			val, ok := frame.Value.(string)
-			if !ok {
-				return errors.New("unknown value")
-			}
-			alen := strconv.FormatInt(int64(len(val)), 10)
-			_, err = c.writer.WriteString("$" + alen + "\r\n" + val + "\r\n")
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
